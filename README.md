@@ -1,6 +1,6 @@
 # BrainRust
 
-BrainRust is a [brainfuck] interpreter written in Rust.
+BrainRust is a [brainfuck](https://en.wikipedia.org/wiki/Brainfuck) interpreter written in Rust.
 
 # License / Copyright
 
