@@ -2,70 +2,93 @@
 
 #[macro_use] extern crate log;
 extern crate env_logger;
+extern crate docopt;
 
 use std::io::{BufRead, Read, Write};
 
 mod interpreter;
 use interpreter::Interpreter;
 
+static VERSION: &'static str = "Brainrust 0.0.1";
+static USAGE: &'static str = "
+Brainrust, a Brainfuck interpreter written in Rust.
+
+Usage: brainrust [options]
+       brainrust [options] <file>
+
+Options:
+    -h --help     Prints this screen
+    -v --version  Prints the current version
+";
+
+struct Config<'a> {
+    file: Option<&'a str>,
+}
+
+impl<'a> Config<'a> {
+    pub fn new(o: &'a docopt::ArgvMap) -> Config<'a> {
+        Config {
+            file: match o.get_str("<file>") { "" => None, s => Some(s) },
+        }
+    }
+
+    pub fn run(&self) {
+        let result = match self.file {
+            Some(_) => { self.file() },
+            None => { self.repl() },
+        };
+
+        match result {
+            // Nothing went wrong
+            Ok(_) => { },
+            // Report error to user
+            Err(_) => {
+                let source = self.file.unwrap_or("<anon>");
+                write!(std::io::stderr(), "Unable to open file `{}`\n", source).ok();
+            }
+        }
+    }
+
+    fn file(&self) -> std::io::Result<()> {
+        let handle = self.file.unwrap();
+        debug!("handle_file({:?})", handle);
+
+        let mut file = try!(std::fs::File::open(handle));
+
+        let mut source = String::new();
+        try!(file.read_to_string(&mut source));
+
+        let mut i = Interpreter::new();
+        i.exec(source);
+        debug!("handle_file() Interpreter = {:?}", i);
+
+        Ok(())
+    }
+
+    fn repl(&self) -> std::io::Result<()> {
+        let stdin = std::io::stdin();
+        let mut i = Interpreter::new();
+
+        debug!("handle_repl()");
+
+        for line in stdin.lock().lines() {
+            i.exec(try!(line));
+            println!("{:?}", i);
+            i.reset();
+        }
+
+        Ok(())
+    }
+}
+
 fn main() {
     env_logger::init().unwrap();
 
-    let args = std::env::args().collect::<Vec<_>>();
+    let opts = docopt::Docopt::new(USAGE)
+                              .and_then(|d| d.help(true)
+                                             .version(Some(String::from(VERSION)))
+                                             .parse())
+                              .unwrap_or_else(|e| e.exit());
 
-    let source;
-    let result = match args.len() {
-        1 => {
-            source = "<anon>";
-            handle_repl()
-        },
-        2 => {
-            source = &args[1];
-            handle_file(source)
-        },
-        _ => {
-            write!(std::io::stderr(), "Usage:   brainrust [file]\n").ok();
-            return;
-        }
-    };
-
-    match result {
-        // Nothing went wrong
-        Ok(_) => { },
-        // Report error to user
-        Err(_) => {
-            write!(std::io::stderr(), "Unable to open file `{}`\n", source).ok();
-        }
-    }
+    Config::new(&opts).run()
 }
-
-fn handle_repl() -> std::io::Result<()> {
-    let stdin = std::io::stdin();
-    let mut i = Interpreter::new();
-
-    debug!("handle_repl()");
-
-    for line in stdin.lock().lines() {
-        i.exec(try!(line));
-        println!("{:?}", i);
-        i.reset();
-    }
-
-    Ok(())
-}
-
-fn handle_file(handle: &str) -> std::io::Result<()> {
-    debug!("handle_file({:?})", handle);
-
-    let mut file = try!(std::fs::File::open(handle));
-
-    let mut source = String::new();
-    try!(file.read_to_string(&mut source));
-
-    let mut i = Interpreter::new();
-    i.exec(source);
-    debug!("handle_file() Interpreter = {:?}", i);
-
-    Ok(())
-}
-
