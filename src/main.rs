@@ -1,4 +1,4 @@
-#![feature(core)]
+#![feature(core, collections_drain)]
 
 #[macro_use] extern crate log;
 extern crate env_logger;
@@ -7,7 +7,7 @@ extern crate docopt;
 use std::io::{BufRead, Read, Write};
 
 mod interpreter;
-use interpreter::Interpreter;
+use interpreter::{Interpreter, Program};
 
 static VERSION: &'static str = "Brainrust 0.0.1";
 static USAGE: &'static str = "
@@ -19,16 +19,19 @@ Usage: brainrust [options]
 Options:
     -h --help     Prints this screen
     -v --version  Prints the current version
+    -O            Optimize
 ";
 
 struct Config<'a> {
     file: Option<&'a str>,
+    optimize: bool,
 }
 
 impl<'a> Config<'a> {
     pub fn new(o: &'a docopt::ArgvMap) -> Config<'a> {
         Config {
             file: match o.get_str("<file>") { "" => None, s => Some(s) },
+            optimize: o.get_bool("-O"),
         }
     }
 
@@ -59,7 +62,9 @@ impl<'a> Config<'a> {
         try!(file.read_to_string(&mut source));
 
         let mut i = Interpreter::new();
-        i.exec(source);
+        let mut p = Program::from(source);
+        if self.optimize { p.reduce() }
+        i.exec(p);
         debug!("handle_file() Interpreter = {:?}", i);
 
         Ok(())
@@ -72,7 +77,9 @@ impl<'a> Config<'a> {
         debug!("handle_repl()");
 
         for line in stdin.lock().lines() {
-            i.exec(try!(line));
+            let mut p = Program::from(try!(line));
+            if self.optimize { p.reduce() }
+            i.exec(p);
             println!("{:?}", i);
             i.reset();
         }
