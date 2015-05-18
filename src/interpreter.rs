@@ -119,7 +119,6 @@ impl Interpreter {
     fn exec_r(&mut self, program: &Program) {
         use self::Opcode::*;
         for opcode in &program.opcodes {
-            trace!("Interpreter::exec_r() opcode = {:?}", opcode);
             self.ic += 1;
             match *opcode {
                 Add(n) => { self.stack[self.sp] = self.stack[self.sp].overflowing_add(n).0 },
