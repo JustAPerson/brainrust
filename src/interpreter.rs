@@ -17,7 +17,7 @@ pub enum Opcode {
 impl Opcode {
     pub fn size(&self) -> usize {
         match *self {
-            Opcode::Loop(ref p) => p.size(),
+            Opcode::Loop(ref p) => 1 + p.size(),
             _ => 1,
         }
     }
