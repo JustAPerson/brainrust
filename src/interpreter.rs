@@ -21,11 +21,18 @@ impl Opcode {
             _ => 1,
         }
     }
+
+    pub fn get_program(&self) -> Option<&Program> {
+        match *self {
+            Opcode::Loop(ref p) => { Some(p) },
+            _ => { None }
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Program {
-    opcodes: Vec<Opcode>,
+    pub opcodes: Vec<Opcode>,
 }
 
 impl Program {
@@ -111,15 +118,17 @@ impl Interpreter {
         self.stack.push(0);
     }
 
-    pub fn exec<S: Into<Program>>(&mut self, source: S) {
+    pub fn exec<S: Into<Program>, T: FnMut(Step)>(&mut self, source: S, mut stepper: T) {
         let program = source.into();
         debug!("Interpreter::exec(p) where p.size() = {}", program.size());
-        self.exec_r(&program)
+        self.exec_r(&program, &mut stepper)
     }
-    fn exec_r(&mut self, program: &Program) {
+    fn exec_r<T: FnMut(Step)>(&mut self, program: &Program, stepper: &mut T) {
         use self::Opcode::*;
+
         for opcode in &program.opcodes {
             self.ic += 1;
+
             match *opcode {
                 Add(n) => { self.stack[self.sp] = self.stack[self.sp].overflowing_add(n).0 },
                 Sub(n) => { self.stack[self.sp] = self.stack[self.sp].overflowing_sub(n).0 },
@@ -131,9 +140,13 @@ impl Interpreter {
                     while self.sp >= self.stack.len() { self.stack.push(0) }
                 },
                 Loop(ref os) => {
+                    let mut count = 0;
+                    stepper(Step::EnterLoop);
                     while self.stack[self.sp] != 0 {
-                        self.exec_r(os);
+                        count += 1;
+                        self.exec_r(os, stepper);
                     }
+                    stepper(Step::LeaveLoop(count));
                 },
                 In => {
                     self.stack[self.sp] = match std::io::stdin().take(1).bytes().next() {
@@ -149,6 +162,12 @@ impl Interpreter {
             }
         }
     }
+}
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub enum Step {
+    EnterLoop,
+    LeaveLoop(u64),
 }
 
 
